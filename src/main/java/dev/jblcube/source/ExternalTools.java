@@ -141,9 +141,22 @@ public final class ExternalTools {
         }
     }
 
+    /**
+     * Checks that a command runs and prints a version.
+     *
+     * <p>Both {@code --version} and {@code -version} are tried on purpose: yt-dlp only understands
+     * the first, while ffmpeg only understands the second (it reads {@code --version} as an unknown
+     * option and exits non-zero). Asking ffmpeg for {@code --version} made a perfectly good binary
+     * look missing.
+     */
     public static Optional<String> probeVersion(String command) {
+        Optional<String> doubleDash = runVersion(command, "--version");
+        return doubleDash.isPresent() ? doubleDash : runVersion(command, "-version");
+    }
+
+    private static Optional<String> runVersion(String command, String flag) {
         try {
-            Process process = new ProcessBuilder(command, "--version").redirectErrorStream(true).start();
+            Process process = new ProcessBuilder(command, flag).redirectErrorStream(true).start();
             String firstLine;
             try (InputStream stream = process.getInputStream()) {
                 firstLine = new String(stream.readAllBytes(), StandardCharsets.UTF_8).lines().findFirst().orElse("");
