@@ -1,0 +1,124 @@
+import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
+
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+    id 'com.github.johnrengelman.shadow' version '8.1.1'
+    id 'net.neoforged.moddev' version '2.0.148'
+}
+
+version = mod_version
+group = mod_group_id
+
+base {
+    archivesName = mod_id
+}
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(21)
+    withSourcesJar()
+}
+
+neoForge {
+    version = neo_version
+
+    accessTransformers.from project.file('src/main/resources/META-INF/accesstransformer.cfg')
+
+    runs {
+        client {
+            client()
+            gameDirectory = file('run/client')
+        }
+        server {
+            server()
+            programArgument '--nogui'
+            gameDirectory = file('run/server')
+        }
+    }
+
+    mods {
+        "${mod_id}" {
+            sourceSet sourceSets.main
+        }
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+configurations {
+    // Dependencies that get shaded into the shipped jar.
+    shaded
+    implementation.extendsFrom(shaded)
+}
+
+dependencies {
+    shaded('com.googlecode.soundlibs:mp3spi:1.9.5.4') {
+        exclude group: 'junit', module: 'junit'
+    }
+    shaded('com.googlecode.soundlibs:jlayer:1.0.1.4') {
+        exclude group: 'junit', module: 'junit'
+    }
+    shaded 'com.googlecode.soundlibs:tritonus-share:0.3.7.4'
+
+    testImplementation platform('org.junit:junit-bom:5.11.4')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+    // ModDevGradle only puts Minecraft on the main compile classpath, but the audio tests touch
+    // classes that implement net.minecraft.client.sounds.AudioStream.
+    testImplementation files(sourceSets.main.compileClasspath)
+}
+
+tasks.named('processResources', ProcessResources).configure {
+    def replacements = [
+            mod_id         : mod_id,
+            mod_name       : mod_name,
+            mod_license    : mod_license,
+            mod_version    : mod_version,
+            mod_authors    : mod_authors,
+            mod_description: mod_description,
+            minecraft_version_range: minecraft_version_range,
+    ]
+    inputs.properties replacements
+    filesMatching(['META-INF/neoforge.mods.toml']) {
+        expand replacements
+    }
+}
+
+tasks.named('jar', Jar).configure {
+    archiveClassifier = 'dev'
+    manifest {
+        attributes([
+                'Specification-Title'     : mod_id,
+                'Specification-Vendor'    : mod_authors,
+                'Specification-Version'   : '1',
+                'Implementation-Title'    : mod_name,
+                'Implementation-Version'  : project.version,
+                'Implementation-Vendor'   : mod_authors,
+        ])
+    }
+}
+
+tasks.named('shadowJar', ShadowJar).configure {
+    configurations = [project.configurations.shaded]
+    archiveClassifier = ''
+    mergeServiceFiles()
+    from sourceSets.main.output
+}
+
+tasks.named('assemble') {
+    dependsOn tasks.named('shadowJar')
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+tasks.named('test', Test).configure {
+    useJUnitPlatform()
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+    }
+}

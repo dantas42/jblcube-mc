@@ -1,0 +1,7 @@
+{
+  "type": "jblcube:bucket",
+  "ingredients": [
+    { "item": "minecraft:wheat" }
+  ],
+  "result": { "id": "jblcube:beer_skol", "count": 1 }
+}

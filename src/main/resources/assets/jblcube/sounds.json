@@ -1,0 +1,13 @@
+{
+  "jbl_cube": {
+    "category": "record",
+    "subtitle": "subtitles.jblcube.jbl_cube",
+    "sounds": [
+      {
+        "name": "jblcube:stream",
+        "stream": true,
+        "attenuation_distance": 32
+      }
+    ]
+  }
+}

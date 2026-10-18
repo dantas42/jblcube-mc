@@ -1,0 +1,12 @@
+{
+  "type": "jblcube:bucket",
+  "ingredients": [
+    { "item": "minecraft:wheat" },
+    { "item": "minecraft:wheat" },
+    { "item": "minecraft:wheat" },
+    { "item": "minecraft:wheat" },
+    { "item": "minecraft:wheat" },
+    { "item": "minecraft:wheat" }
+  ],
+  "result": { "id": "jblcube:beer_kaiser", "count": 1 }
+}

@@ -1,0 +1,11 @@
+{
+  "type": "jblcube:bucket",
+  "ingredients": [
+    { "item": "minecraft:wheat" },
+    { "item": "minecraft:wheat" },
+    { "item": "minecraft:wheat" },
+    { "item": "minecraft:wheat" },
+    { "item": "minecraft:wheat" }
+  ],
+  "result": { "id": "jblcube:beer_bohemia", "count": 1 }
+}
