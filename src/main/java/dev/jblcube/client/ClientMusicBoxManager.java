@@ -54,6 +54,10 @@ public final class ClientMusicBoxManager {
     private static final long RELAY_TIMEOUT_MILLIS = 8000L;
     private static final int POSITION_SYNC_TICKS = 40;
     private static final int START_ATTEMPT_COOLDOWN_MILLIS = 2500;
+    /** How long a real playback waits for the server (or the tools) to produce a file. */
+    private static final long AUDIO_FETCH_TIMEOUT_MILLIS = 180_000L;
+    /** Prefetches use a short timeout so the single prefetch thread is never parked for minutes. */
+    private static final long PREFETCH_TIMEOUT_MILLIS = 15_000L;
     /** How often the nearby placed cubes are looked for, in ticks. */
     private static final int CUBE_SCAN_TICKS = 10;
     /** 3 chunks == 48 blocks, comfortably past the audible radius of the sound. */
@@ -393,7 +397,7 @@ public final class ClientMusicBoxManager {
 
         int startMillis = Math.max(0, data.positionMillis() - 1500);
         CompletableFuture
-                .supplyAsync(() -> openDecoder(track, startMillis), workers)
+                .supplyAsync(() -> openDecoder(track, startMillis, false), workers)
                 .thenAccept(decoder -> minecraft.execute(() -> {
                     if (decoder == null || placedCubes.get(pos) != cube) {
                         if (decoder != null) {
@@ -404,7 +408,7 @@ public final class ClientMusicBoxManager {
                     }
                     cube.attach(decoder, minecraft);
                     sendCubeLoading(cube.pos, false);
-                    prefetchNext(data);
+                    prefetchNext(data, false);
                 }));
     }
 
@@ -455,7 +459,7 @@ public final class ClientMusicBoxManager {
         MusicBoxData advanced = data.advance(false);
         blockEntity.setData(advanced);
         sendCubeState(cube.pos, advanced);
-        prefetchNext(advanced);
+        prefetchNext(advanced, false);
     }
 
     public void sendCubeState(BlockPos pos, MusicBoxData data) {
@@ -569,7 +573,7 @@ public final class ClientMusicBoxManager {
         }
 
         startLocalPlayback(track, data.positionMillis(), data.volume());
-        prefetchNext(data);
+        prefetchNext(data, true);
     }
 
     /** Only write the position back on the sync interval: every tick marked the stack dirty 20x/s. */
@@ -592,8 +596,21 @@ public final class ClientMusicBoxManager {
     }
 
     public void prefetchTrack(MusicBoxTrack track) {
-        if (track == null || track.url().isBlank() || SourceResolver.isCached(track)
-                || !prefetchedUrls.add(track.url())) {
+        prefetch(track, true);
+    }
+
+    private void prefetch(MusicBoxTrack track, boolean owner) {
+        if (track == null || track.url().isBlank()) {
+            return;
+        }
+        if (SourceResolver.isCached(track)) {
+            // Already on disk: nothing to download, but an owner still seeds the server from cache.
+            if (owner) {
+                prefetchWorkers.execute(() -> NetworkAudio.INSTANCE.fetchFile(track, true, PREFETCH_TIMEOUT_MILLIS));
+            }
+            return;
+        }
+        if (!prefetchedUrls.add(track.url())) {
             return;
         }
         while (prefetchedUrls.size() > MAX_PREFETCHED_URLS) {
@@ -604,7 +621,7 @@ public final class ClientMusicBoxManager {
         prefetchWorkers.execute(() -> {
             try {
                 // Also streams from the server when this machine cannot fetch the audio itself.
-                NetworkAudio.INSTANCE.fetchFile(track);
+                NetworkAudio.INSTANCE.fetchFile(track, owner, PREFETCH_TIMEOUT_MILLIS);
             } catch (RuntimeException e) {
                 LOGGER.debug("Could not prefetch {}", track.url(), e);
             }
@@ -616,7 +633,7 @@ public final class ClientMusicBoxManager {
      * the next song does not have to wait for a download. Runs on its own thread: a prefetch must
      * never delay the track the player actually asked for.
      */
-    private void prefetchNext(MusicBoxData data) {
+    private void prefetchNext(MusicBoxData data, boolean owner) {
         MusicBoxTrack track = data.currentTrack();
         if (track == null || data.trackCount() <= 1) {
             return;
@@ -630,7 +647,7 @@ public final class ClientMusicBoxManager {
             next = 0;
         }
 
-        prefetchTrack(data.tracks().get(next));
+        prefetch(data.tracks().get(next), owner);
     }
 
     private void startLocalPlayback(MusicBoxTrack track, int startMillis, float boxVolume) {
@@ -644,7 +661,7 @@ public final class ClientMusicBoxManager {
         int generation = ++playbackGeneration;
 
         CompletableFuture
-                .supplyAsync(() -> openDecoder(track, startMillis), workers)
+                .supplyAsync(() -> openDecoder(track, startMillis, true), workers)
                 .thenAccept(decoder -> Minecraft.getInstance().execute(() -> {
                     // A newer start (or a stop) happened while the decoder was opening. Starting now
                     // would leave the old sound instance running with nothing holding a reference to
@@ -681,9 +698,9 @@ public final class ClientMusicBoxManager {
                 });
     }
 
-    private AudioDecoder openDecoder(MusicBoxTrack track, int startMillis) {
+    private AudioDecoder openDecoder(MusicBoxTrack track, int startMillis, boolean owner) {
         try {
-            Optional<Path> file = NetworkAudio.INSTANCE.fetchFile(track);
+            Optional<Path> file = NetworkAudio.INSTANCE.fetchFile(track, owner, AUDIO_FETCH_TIMEOUT_MILLIS);
             if (file.isEmpty()) {
                 LOGGER.warn("No audio source available for {}", track.url());
                 return null;
@@ -802,7 +819,7 @@ public final class ClientMusicBoxManager {
     private void startRemotePlayback(Minecraft minecraft, RemoteBox box, ModPayloads.RelayPayload payload) {
         MusicBoxTrack track = new MusicBoxTrack(payload.url(), payload.title(), 0);
         CompletableFuture
-                .supplyAsync(() -> openDecoder(track, Math.max(0, payload.positionMillis() - 1500)), workers)
+                .supplyAsync(() -> openDecoder(track, Math.max(0, payload.positionMillis() - 1500), false), workers)
                 .thenAccept(decoder -> minecraft.execute(() -> {
                     if (decoder == null || remoteBoxes.get(payload.holder()) != box) {
                         if (decoder != null) {

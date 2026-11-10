@@ -53,15 +53,12 @@
   "status.jblcube.nearby": "♪ %s",
   "status.jblcube.failed": "Could not play that track",
 
-  "command.jblcube.tools.checking": "Checking yt-dlp and ffmpeg...",
+  "command.jblcube.tools.checking": "Checking yt-dlp...",
   "command.jblcube.tools.ytdlp": "yt-dlp: %s",
-  "command.jblcube.tools.ffmpeg": "ffmpeg: %s",
   "command.jblcube.tools.ok": "available",
   "command.jblcube.tools.missing": "MISSING",
   "command.jblcube.tools.folder": "Tools folder: %s",
-  "command.jblcube.tools.summary.ok": "YouTube links will play.",
-  "command.jblcube.tools.summary.none": "YouTube will not play; only direct .mp3 links work. Drop the tools in the folder above or let the server reach github.com.",
-  "command.jblcube.tools.summary.no_ffmpeg": "yt-dlp found but ffmpeg is missing: YouTube will not play; only direct .mp3 links work.",
-  "command.jblcube.tools.summary.no_ytdlp": "ffmpeg found but yt-dlp is missing: YouTube falls back to Invidious (less reliable).",
+  "command.jblcube.tools.summary.ok": "yt-dlp ready: this server can resolve YouTube links. Music is delivered from the DJ's upload.",
+  "command.jblcube.tools.summary.no_ytdlp": "yt-dlp missing: only players who have yt-dlp on their own machine can add YouTube links. Playback still works for everyone.",
   "command.jblcube.tools.error": "Could not check the tools; see the server log."
 }

@@ -37,9 +37,9 @@ public final class ModPayloads {
     }
 
     public static void register(final RegisterPayloadHandlersEvent event) {
-        // Bumped to 2: the server now streams audio and expands playlists, so an older jar cannot
-        // keep a connection to a newer one.
-        PayloadRegistrar registrar = event.registrar("2");
+        // Bumped to 3: the server no longer fetches audio itself; the DJ's client uploads the mp3
+        // and the server relays it. A "2" (or older) jar would silently fail to serve audio.
+        PayloadRegistrar registrar = event.registrar("3");
 
         registrar.playToServer(BoxAddTracksPayload.TYPE, BoxAddTracksPayload.STREAM_CODEC, ServerPayloadHandler::handleAddTracks);
         registrar.playToServer(BoxRemoveTrackPayload.TYPE, BoxRemoveTrackPayload.STREAM_CODEC, ServerPayloadHandler::handleRemoveTrack);
@@ -56,6 +56,8 @@ public final class ModPayloads {
         registrar.playToServer(ExpandUrlPayload.TYPE, ExpandUrlPayload.STREAM_CODEC, ServerPayloadHandler::handleExpandUrl);
         registrar.playToServer(RequestAudioPayload.TYPE, RequestAudioPayload.STREAM_CODEC,
                 ServerPayloadHandler::handleRequestAudio);
+        registrar.playToServer(UploadAudioPayload.TYPE, UploadAudioPayload.STREAM_CODEC,
+                ServerPayloadHandler::handleUploadAudio);
 
         registrar.playToClient(RelayPayload.TYPE, RelayPayload.STREAM_CODEC, ClientPayloadHandler::handleRelay);
         registrar.playToClient(ExpandResultPayload.TYPE, ExpandResultPayload.STREAM_CODEC,
@@ -245,17 +247,39 @@ public final class ModPayloads {
     }
 
     /** The client asks the server to download and convert a song and stream the file back to it. */
-    public record RequestAudioPayload(int id, String url) implements CustomPacketPayload {
+    public record RequestAudioPayload(int id, String url, boolean owner) implements CustomPacketPayload {
         public static final CustomPacketPayload.Type<RequestAudioPayload> TYPE =
                 new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath("jblcube", "request_audio"));
 
         public static final StreamCodec<ByteBuf, RequestAudioPayload> STREAM_CODEC = StreamCodec.composite(
                 ByteBufCodecs.VAR_INT, RequestAudioPayload::id,
                 ByteBufCodecs.stringUtf8(UrlValidator.MAX_URL_LENGTH), RequestAudioPayload::url,
+                ByteBufCodecs.BOOL, RequestAudioPayload::owner,
                 RequestAudioPayload::new);
 
         @Override
         public CustomPacketPayload.Type<RequestAudioPayload> type() {
+            return TYPE;
+        }
+    }
+
+    /**
+     * A client that already has an mp3 seeds the server with it, so the server can relay the audio
+     * to listeners without ever needing yt-dlp/ffmpeg itself.
+     */
+    public record UploadAudioPayload(int id, String url, byte[] data, boolean last) implements CustomPacketPayload {
+        public static final CustomPacketPayload.Type<UploadAudioPayload> TYPE =
+                new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath("jblcube", "upload_audio"));
+
+        public static final StreamCodec<ByteBuf, UploadAudioPayload> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_INT, UploadAudioPayload::id,
+                ByteBufCodecs.stringUtf8(UrlValidator.MAX_URL_LENGTH), UploadAudioPayload::url,
+                BYTE_SLICE, UploadAudioPayload::data,
+                ByteBufCodecs.BOOL, UploadAudioPayload::last,
+                UploadAudioPayload::new);
+
+        @Override
+        public CustomPacketPayload.Type<UploadAudioPayload> type() {
             return TYPE;
         }
     }

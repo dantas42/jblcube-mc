@@ -10,10 +10,13 @@ import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -21,21 +24,26 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * The client half of the "no install needed" pipeline: tries the local resolver first (cached files,
- * direct mp3 links or a machine that does have yt-dlp), and when that cannot produce audio it asks
- * the server to expand the URL or convert and stream the song.
+ * The client half of the audio pipeline. The owner (the DJ whose box is playing) and the listeners
+ * both ask the server for the mp3, which the server serves from its cache or fetches once. When the
+ * server cannot fetch, the DJ falls back to its own tools (auto-downloaded on first use) and seeds
+ * the server for everyone else, so listeners never need yt-dlp/ffmpeg themselves.
  */
 public final class NetworkAudio {
     private static final Logger LOGGER = LoggerFactory.getLogger("jblcube/network-audio");
 
     private static final long EXPAND_TIMEOUT_MILLIS = 60_000L;
-    private static final long AUDIO_TIMEOUT_MILLIS = 180_000L;
+
+    /** Size of one slice when a client seeds the server with an mp3 it already fetched. */
+    private static final int UPLOAD_CHUNK_BYTES = 32 * 1024;
 
     public static final NetworkAudio INSTANCE = new NetworkAudio();
 
     private final AtomicInteger ids = new AtomicInteger();
     private final ConcurrentMap<Integer, CompletableFuture<List<MusicBoxTrack>>> expands = new ConcurrentHashMap<>();
     private final ConcurrentMap<Integer, AudioSink> sinks = new ConcurrentHashMap<>();
+    /** URLs already sent to the server this session, so a seek or re-play does not re-upload. */
+    private final Set<String> uploadedUrls = ConcurrentHashMap.newKeySet();
 
     private NetworkAudio() {
     }
@@ -60,26 +68,75 @@ public final class NetworkAudio {
     }
 
     /**
-     * Returns an audio file for the track: from the local cache or tools when possible, otherwise by
-     * asking the server to download and convert it and streaming the result back.
+     * Returns an audio file for the track.
+     *
+     * <p>Both the owner and the listeners ask the server first, which serves its cache or fetches the
+     * source. When the server cannot deliver, the <b>owner</b> (the DJ) falls back to its local tools
+     * (auto-downloaded once) and seeds the server, while a <b>listener</b> just gives up — it never
+     * spawns yt-dlp/ffmpeg on its own machine.
      */
-    public Optional<Path> fetchFile(MusicBoxTrack track) {
-        Optional<Path> local = SourceResolver.fetchAudioFile(track);
-        if (local.isPresent()) {
-            return local;
+    public Optional<Path> fetchFile(MusicBoxTrack track, boolean owner, long timeoutMillis) {
+        Optional<Path> cached = SourceResolver.cachedFile(track);
+        if (cached.isPresent()) {
+            if (owner) {
+                upload(track.url(), cached.get());
+            }
+            return cached;
         }
-        return fetchFromServer(track.url());
+        // Ask the server first: it serves from its cache or fetches the source, so neither the DJ
+        // nor the listeners have to download yt-dlp/ffmpeg.
+        Optional<Path> fromServer = fetchFromServer(track.url(), timeoutMillis, owner);
+        if (fromServer.isPresent()) {
+            return fromServer;
+        }
+        // Last resort for the DJ: fetch locally (auto-downloads the tools once) and seed the server.
+        if (owner) {
+            Optional<Path> fetched = SourceResolver.fetchAudioFile(track);
+            if (fetched.isPresent()) {
+                upload(track.url(), fetched.get());
+                return fetched;
+            }
+        }
+        return Optional.empty();
     }
 
-    private Optional<Path> fetchFromServer(String url) {
+    /**
+     * Seeds the server with an mp3 this machine already has, once per URL per session. Runs on a
+     * daemon thread so a slow upload never blocks playback or the game thread.
+     */
+    private void upload(String url, Path path) {
+        if (url == null || url.isBlank() || !uploadedUrls.add(url)) {
+            return;
+        }
+        Thread thread = new Thread(() -> {
+            int id = ids.incrementAndGet();
+            try (InputStream in = Files.newInputStream(path)) {
+                byte[] buffer = new byte[UPLOAD_CHUNK_BYTES];
+                int read = in.read(buffer);
+                while (read != -1) {
+                    byte[] chunk = Arrays.copyOf(buffer, read);
+                    int next = in.read(buffer);
+                    boolean last = next == -1;
+                    PacketDistributor.sendToServer(new ModPayloads.UploadAudioPayload(id, url, chunk, last));
+                    read = next;
+                }
+            } catch (IOException e) {
+                LOGGER.warn("Could not upload {} to the server", url, e);
+            }
+        }, "Music Box Upload");
+        thread.setDaemon(true);
+        thread.start();
+    }
+
+    private Optional<Path> fetchFromServer(String url, long timeoutMillis, boolean owner) {
         int id = ids.incrementAndGet();
         TrackCache.ensureDirectory();
         Path target = TrackCache.directory().resolve(TrackCache.cacheKey(url) + ".mp3");
         AudioSink sink = new AudioSink(target);
         sinks.put(id, sink);
-        PacketDistributor.sendToServer(new ModPayloads.RequestAudioPayload(id, url));
+        PacketDistributor.sendToServer(new ModPayloads.RequestAudioPayload(id, url, owner));
         try {
-            return Optional.ofNullable(sink.future.get(AUDIO_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS));
+            return Optional.ofNullable(sink.future.get(timeoutMillis, TimeUnit.MILLISECONDS));
         } catch (Exception e) {
             sinks.remove(id);
             LOGGER.warn("Server did not deliver audio for {}", url);

@@ -53,15 +53,12 @@
   "status.jblcube.nearby": "♪ %s",
   "status.jblcube.failed": "Não foi possível tocar essa música",
 
-  "command.jblcube.tools.checking": "Verificando yt-dlp e ffmpeg...",
+  "command.jblcube.tools.checking": "Verificando yt-dlp...",
   "command.jblcube.tools.ytdlp": "yt-dlp: %s",
-  "command.jblcube.tools.ffmpeg": "ffmpeg: %s",
   "command.jblcube.tools.ok": "disponível",
   "command.jblcube.tools.missing": "AUSENTE",
   "command.jblcube.tools.folder": "Pasta de ferramentas: %s",
-  "command.jblcube.tools.summary.ok": "Links do YouTube vão tocar.",
-  "command.jblcube.tools.summary.none": "YouTube não vai tocar; só links diretos .mp3 funcionam. Coloque as ferramentas na pasta acima ou libere o acesso a github.com no servidor.",
-  "command.jblcube.tools.summary.no_ffmpeg": "yt-dlp encontrado, mas falta o ffmpeg: YouTube não vai tocar; só links diretos .mp3 funcionam.",
-  "command.jblcube.tools.summary.no_ytdlp": "ffmpeg encontrado, mas falta o yt-dlp: YouTube cai no Invidious (menos confiável).",
+  "command.jblcube.tools.summary.ok": "yt-dlp pronto: este servidor consegue resolver links do YouTube. A música chega pelo upload de quem toca.",
+  "command.jblcube.tools.summary.no_ytdlp": "yt-dlp ausente: só quem tem yt-dlp na própria máquina consegue adicionar links do YouTube. A reprodução continua funcionando para todos.",
   "command.jblcube.tools.error": "Não foi possível verificar as ferramentas; veja o log do servidor."
 }

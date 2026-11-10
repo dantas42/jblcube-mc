@@ -42,7 +42,6 @@ public final class JblCubeCommands {
             }
 
             reply(source, Component.translatable("command.jblcube.tools.ytdlp", state(status.ytDlp())));
-            reply(source, Component.translatable("command.jblcube.tools.ffmpeg", state(status.ffmpeg())));
             reply(source, Component.translatable("command.jblcube.tools.folder", ToolDownloader.directory().toString())
                     .withStyle(ChatFormatting.GRAY));
             reply(source, summary(status));
@@ -60,12 +59,6 @@ public final class JblCubeCommands {
     private static Component summary(ServerToolCheck.Status status) {
         if (status.youtubeReady()) {
             return Component.translatable("command.jblcube.tools.summary.ok").withStyle(ChatFormatting.GREEN);
-        }
-        if (!status.ytDlp() && !status.ffmpeg()) {
-            return Component.translatable("command.jblcube.tools.summary.none").withStyle(ChatFormatting.RED);
-        }
-        if (!status.ffmpeg()) {
-            return Component.translatable("command.jblcube.tools.summary.no_ffmpeg").withStyle(ChatFormatting.RED);
         }
         return Component.translatable("command.jblcube.tools.summary.no_ytdlp").withStyle(ChatFormatting.GOLD);
     }

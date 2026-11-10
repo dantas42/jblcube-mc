@@ -140,6 +140,10 @@ final class PlacedCubeTarget implements MusicBoxTarget {
     @Override
     public void pushSelect(MusicBoxData updated) {
         manager.sendCubeState(pos, updated);
+        // The editor user is the de-facto owner of this cube: seed the server with the selected
+        // track so nearby listeners (and this client, on the server stream) can hear it without
+        // having to fetch it themselves.
+        manager.prefetchTrack(updated.currentTrack());
     }
 
     @Override

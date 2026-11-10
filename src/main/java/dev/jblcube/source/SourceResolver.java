@@ -235,14 +235,22 @@ public final class SourceResolver {
         return TrackCache.cachedFile(url, extensionOf(url));
     }
 
-    /** True when the track audio is already on disk, so starting it does not need the network. */
-    public static boolean isCached(MusicBoxTrack track) {
+    /**
+     * The cached audio file for a track, without touching the network or the helper tools. Used by
+     * remote listeners, who must never trigger a yt-dlp/ffmpeg download on their own machine.
+     */
+    public static Optional<Path> cachedFile(MusicBoxTrack track) {
         if (track == null || track.url().isBlank()) {
-            return false;
+            return Optional.empty();
         }
         String url = track.url();
-        return TrackCache.cachedFile(url, extensionOf(url)).isPresent()
-                || TrackCache.cachedFile(url, ".mp3").isPresent();
+        Optional<Path> cached = TrackCache.cachedFile(url, extensionOf(url));
+        return cached.isPresent() ? cached : TrackCache.cachedFile(url, ".mp3");
+    }
+
+    /** True when the track audio is already on disk, so starting it does not need the network. */
+    public static boolean isCached(MusicBoxTrack track) {
+        return cachedFile(track).isPresent();
     }
 
     private static Optional<Path> downloadWithYtDlp(String url) {

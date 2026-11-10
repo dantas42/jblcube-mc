@@ -58,9 +58,9 @@ public final class JblCubeHudLayer {
         int lineHeight = minecraft.font.lineHeight + LINE_SPACING;
         int fontHeight = minecraft.font.lineHeight;
 
-        // Sticks to the bottom of the screen, just above the hotbar, like an action bar line that
-        // never fades; the song name used to float next to the crosshair in the middle of the view.
-        int lastLineTop = screenHeight - 32 - fontHeight;
+        // Sits at the vanilla action-bar height, comfortably above the hotbar and the
+        // health/hunger/XP bars, so the song name never covers the player's status.
+        int lastLineTop = screenHeight - 68;
         int top = lastLineTop - (lines.size() - 1) * lineHeight;
         for (int i = 0; i < lines.size(); i++) {
             Component line = lines.get(i);

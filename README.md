@@ -25,7 +25,7 @@ playlist URL or a direct audio URL, and everyone nearby hears it coming from the
 | Mod loader | NeoForge 21.1.253 or newer |
 | Java | 21 |
 
-### External tools (optional but recommended)
+### External tools (auto-downloaded, no manual install)
 
 | Tool | Why | Env override |
 |---|---|---|
@@ -33,6 +33,11 @@ playlist URL or a direct audio URL, and everyone nearby hears it coming from the
 | [ffmpeg](https://ffmpeg.org) | Converts audio that is not MP3 into MP3 | `JBLCUBE_FFMPEG` |
 
 The older `HANDMUSICBOX_YTDLP` / `HANDMUSICBOX_FFMPEG` names are still honoured as a fallback.
+
+Nobody has to install these by hand. The **server** downloads them on its own the first time it has
+to fetch a song, then streams the MP3 to everyone — the DJ and the listeners alike. If the server
+cannot reach github.com/YouTube, the DJ's own machine downloads them as a fallback and uploads the
+MP3, so listeners still never install a thing. The MP3 decoder ships inside the mod.
 
 If `yt-dlp` is not installed, YouTube links are resolved through public Invidious instances
 instead. If `ffmpeg` is missing, only MP3 sources can be played. Both tools are looked up on the
@@ -42,17 +47,20 @@ Downloads and transcodes are cached in `.minecraft/jblcube/cache`.
 
 ## How playback works
 
-1. The client resolves the pasted text into one or more tracks (`SourceResolver`): playlist file →
-   YouTube via yt-dlp → direct download (ffmpeg transcode if needed) → Invidious fallback.
-2. Each listening client decodes the audio with a pure-Java MP3 decoder and feeds it to Minecraft
-   through a streaming sound instance, so the sound starts before the file is fully downloaded
-   and seeks are instantaneous.
+1. The DJ (the player who pastes a link) resolves the text into one or more tracks
+   (`SourceResolver`): playlist file → YouTube via yt-dlp → direct download (ffmpeg transcode if
+   needed) → Invidious fallback. Resolution runs on the DJ's machine when it has yt-dlp, otherwise
+   on the server.
+2. Whoever needs the audio asks the server. The server serves its cached MP3, or fetches and
+   transcodes the source once and streams it. If the server cannot fetch, the DJ's client fetches
+   locally and uploads the MP3 to the server as a fallback.
 3. A cube in your hand relays incremental state changes to the server, which broadcasts the current
    track, position, volume and holder to nearby players.
 4. A placed cube stores its playlist in a block entity and syncs it with the vanilla block-entity
    update packet, so every client that can see the block rebuilds the same track.
-5. Listening clients play it through their own sound engine at the cube's coordinates, so the music
-   is localised per player.
+5. Every listener decodes the MP3 with the bundled pure-Java MP3 decoder and plays it through its own
+   sound engine at the cube's coordinates, so the music is localised per player and nobody else
+   installs a thing.
 
 ## Building
 

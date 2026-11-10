@@ -126,7 +126,20 @@ public final class ServerPayloadHandler {
         if (!(context.player() instanceof ServerPlayer player)) {
             return;
         }
-        ServerAudio.requestAudio(payload.id(), payload.url(), player);
+        ServerAudio.requestAudio(payload.id(), payload.url(), payload.owner(), player);
+    }
+
+    public static void handleUploadAudio(ModPayloads.UploadAudioPayload payload, IPayloadContext context) {
+        if (!(context.player() instanceof ServerPlayer player)) {
+            return;
+        }
+        // Defensive cap: the chunk codec allows arbitrary sizes, but the client never sends more
+        // than 32 KiB. Rejecting larger slices stops a hostile client from flooding server memory.
+        if (payload.data() == null || payload.data().length > 128 * 1024) {
+            return;
+        }
+        context.enqueueWork(() -> ServerAudio.receiveUploadChunk(payload.id(), payload.url(),
+                payload.data(), payload.last()));
     }
 
     public static void handleCubeState(ModPayloads.CubeStatePayload payload, IPayloadContext context) {
